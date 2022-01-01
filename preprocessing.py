@@ -1,8 +1,8 @@
 import os
 
-CODA_DLL_PATH = (
-    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/bin"  # gpu support
-)
+from config import config
+
+CODA_DLL_PATH = config["preprocessing"]["coda_dll_path"]
 os.add_dll_directory(
     CODA_DLL_PATH
 )  # https://github.com/tensorflow/tensorflow/issues/48868#issuecomment-841396124
@@ -16,6 +16,8 @@ import pandas as pd
 import tensorflow as tf
 
 from plogging import log_time, logger
+
+IMG_SIZE = int(config["main"]["img_size"])
 
 
 def _limit_correction(pts, shape):
@@ -101,9 +103,9 @@ def rotate(img, bb):
 
 def standardize(img):
     """
-    resize to 64x64 and make it gray
+    resize to 32x32 and make it gray
     """
-    img_ = cv2.resize(img, (64, 64))
+    img_ = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
     return cv2.cvtColor(img_, cv2.COLOR_BGR2GRAY)
 
 
@@ -119,14 +121,14 @@ def mk_charlst(lst):
 
 
 @log_time
-def create_dataset(h5_file, verbose=False):
+def create_dataset(h5_file, verbose=False, photos=None, rotation=False):
     """
     main function - read h5 and return dataset
     """
     logger.info(f"Create dataset started [h5_file={h5_file}]")
     db = h5py.File(h5_file)
     dataset = []
-    images = db["data"].keys()
+    images = photos or db["data"].keys()
     c = 0
 
     for im in images:
@@ -143,9 +145,12 @@ def create_dataset(h5_file, verbose=False):
             bb = bbs[:, :, i]
             font = fonts[i]
             char, word = chars[i]
+
             img_ = crop(img, bb)
-            img_ = rotate(img_, bb)
+            if rotation:
+                img_ = rotate(img_, bb)
             img_ = standardize(img_)
+
             dataset.append(
                 {
                     "img": img_,
@@ -161,3 +166,9 @@ def create_dataset(h5_file, verbose=False):
     df = pd.DataFrame(dataset)
 
     return df
+
+
+if __name__ == "__main__":
+    create_dataset(
+        "SynthText.h5", verbose=1, photos=["pottery_13.jpg_0"], rotation=False
+    )

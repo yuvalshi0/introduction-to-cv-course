@@ -6,9 +6,11 @@ import numpy as np
 import tensorflow as tf
 from sklearn.metrics import auc, roc_curve
 
+import plogging
+
 
 def plot_confusion_matrix(
-    y_test, y_pred, classes, title="Confusion matrix", cmap=plt.cm.Blues
+    y_test, y_pred, classes, title="Confusion matrix", cmap=plt.cm.Blues, save=False
 ):
     """
     Taken from: https://deeplizard.com/learn/video/km7pxKy4UHU with some adjustions
@@ -40,10 +42,12 @@ def plot_confusion_matrix(
     plt.tight_layout()
     plt.ylabel("True label")
     plt.xlabel("Predicted label")
+    if save:
+        plt.savefig("metrics/cmatrix.png")
     plt.show()
 
 
-def plot_loss(history):
+def plot_loss(history, save=False):
 
     # summarize history for accuracy
     plt.plot(history.history["accuracy"])
@@ -52,20 +56,24 @@ def plot_loss(history):
     plt.ylabel("accuracy")
     plt.xlabel("epoch")
     plt.legend(["Train", "Validation"], loc="upper left")
+    if save:
+        plt.savefig("metrics/loss.png")
     plt.show()
 
 
-def plot_acc(history):
+def plot_acc(history, save=False):
     plt.plot(history.history["loss"])
     plt.plot(history.history["val_loss"])
     plt.title("model loss")
     plt.ylabel("loss")
     plt.xlabel("epoch")
     plt.legend(["Train", "Validation"], loc="upper left")
+    if save:
+        plt.savefig("metrics/accuracy.png")
     plt.show()
 
 
-def plot_roc(y_test, y_pred, classes, zoom=True):
+def plot_roc(y_test, y_pred, classes, zoom=True, save=False):
     """
     taken from: https://gist.github.com/Tony607/82f7dad24fc122a78d1bdd69e76fbffe with small adjustments
     """
@@ -138,6 +146,8 @@ def plot_roc(y_test, y_pred, classes, zoom=True):
     plt.ylabel("True Positive Rate")
     plt.title("Some extension of Receiver operating characteristic to multi-class")
     plt.legend(loc="lower right")
+    if save:
+        plt.savefig("metrics/roc.png")
     plt.show()
 
     # Zoom in view of the upper left corner.
@@ -148,7 +158,8 @@ def plot_roc(y_test, y_pred, classes, zoom=True):
         plt.plot(
             fpr["micro"],
             tpr["micro"],
-            label="micro-average ROC curve (area = {0:0.2f})" "".format(roc_auc["micro"]),
+            label="micro-average ROC curve (area = {0:0.2f})"
+            "".format(roc_auc["micro"]),
             color="deeppink",
             linestyle=":",
             linewidth=4,
@@ -157,7 +168,8 @@ def plot_roc(y_test, y_pred, classes, zoom=True):
         plt.plot(
             fpr["macro"],
             tpr["macro"],
-            label="macro-average ROC curve (area = {0:0.2f})" "".format(roc_auc["macro"]),
+            label="macro-average ROC curve (area = {0:0.2f})"
+            "".format(roc_auc["macro"]),
             color="navy",
             linestyle=":",
             linewidth=4,
@@ -170,6 +182,7 @@ def plot_roc(y_test, y_pred, classes, zoom=True):
                 tpr[c],
                 color=color,
                 lw=lw,
-                label="ROC curve of class {0} (area = {1:0.2f})" "".format(c, roc_auc[c]),
+                label="ROC curve of class {0} (area = {1:0.2f})"
+                "".format(c, roc_auc[c]),
             )
     plt.show()
