@@ -197,7 +197,7 @@ def create_dataset(
 
         t = str(int(time.time()))[-3:]
         l_ = len(df)
-        ds.to_hdf(f"prep_{l_}_{t}", key="db")
+        df.to_hdf(f"db/prep_{l_}_{t}.h5", key="db")
 
     return df
 
@@ -208,6 +208,6 @@ if __name__ == "__main__":
         verbose=1,
         rotation=True,
         augment=True,
-        augment_cycles=80,
+        augment_cycles=30,
         save=True,
     )

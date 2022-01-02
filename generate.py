@@ -174,7 +174,7 @@ def generate_image(char, font, base_img_name):
     generate an image
     """
     img = cv2.imread(f"{IMAGE_FOLDER}\\{base_img_name}")
-    
+
     font_size = int(IMG_SIZE * 1.5)
     font_ = ImageFont.truetype(f"{FONTS_FOLDER}\\{font}.ttf", font_size)
     # random start points
@@ -217,6 +217,6 @@ if __name__ == "__main__":
     ct = int(time.time())
     acycles = 30
     images = generate_images(
-        num_images=500, verbose=1, augment=True, augment_cycles=acycles
+        num_images=400, verbose=1, augment=True, augment_cycles=acycles
     )
-    images.to_hdf(f"generated_{acycles}_{ct}.h5", key="db")
+    images.to_hdf(f"db/generated_{acycles}_{ct}.h5", key="db")
