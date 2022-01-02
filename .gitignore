@@ -8,5 +8,6 @@
 **/*.vscode/
 **/*fonts/
 **/*metrics/
+**/*db/
 # config files
 **/*.ini

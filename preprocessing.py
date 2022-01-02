@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+from augment import augment_image
 from plogging import log_time, logger
 
 IMG_SIZE = int(config["main"]["img_size"])
@@ -121,7 +122,15 @@ def mk_charlst(lst):
 
 
 @log_time
-def create_dataset(h5_file, verbose=False, photos=None, rotation=False):
+def create_dataset(
+    h5_file,
+    verbose=False,
+    photos=None,
+    rotation=False,
+    augment=False,
+    augment_cycles=3,
+    save=True,
+):
     """
     main function - read h5 and return dataset
     """
@@ -149,26 +158,56 @@ def create_dataset(h5_file, verbose=False, photos=None, rotation=False):
             img_ = crop(img, bb)
             if rotation:
                 img_ = rotate(img_, bb)
-            img_ = standardize(img_)
+            simg_ = standardize(img_)
 
             dataset.append(
                 {
-                    "img": img_,
+                    "img": simg_,
                     "font": font.decode("utf-8"),
                     "char": char,
                     "word": word,
                     "img_name": im,
                 }
             )
+            if augment:
+                augment_cycles_ = (
+                    augment_cycles
+                    if not font == "Michroma"
+                    else int(augment_cycles * 1.5)
+                )
+                for _ in range(augment_cycles_):
+                    tmpimg_ = augment_image(img_)
+                    simg_ = standardize(tmpimg_)
+                    dataset.append(
+                        {
+                            "img": simg_,
+                            "font": font.decode("utf-8"),
+                            "char": char,
+                            "word": word,
+                            "img_name": im,
+                        }
+                    )
         if verbose:
             c += 1
             logger.info(f"Finished image {c}/{len(images)} [image={im}]")
     df = pd.DataFrame(dataset)
 
+    if save:
+        import time
+
+        t = str(int(time.time()))[-3:]
+        l_ = len(df)
+        ds.to_hdf(f"prep_{l_}_{t}", key="db")
+
     return df
 
 
 if __name__ == "__main__":
-    create_dataset(
-        "SynthText.h5", verbose=1, photos=["pottery_13.jpg_0"], rotation=False
+    ds = create_dataset(
+        "SynthText.h5",
+        verbose=1,
+        rotation=True,
+        augment=True,
+        augment_cycles=80,
+        save=True,
     )
