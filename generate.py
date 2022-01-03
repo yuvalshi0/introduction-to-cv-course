@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 
-from augment import augment_image
+from augment import BAD_augment_image, augment_image
 from plogging import log_time, logger
 from preprocessing import standardize
 
@@ -215,8 +215,9 @@ if __name__ == "__main__":
     import time
 
     ct = int(time.time())
-    acycles = 30
-    images = generate_images(
-        num_images=400, verbose=1, augment=True, augment_cycles=acycles
-    )
-    images.to_hdf(f"db/generated_{acycles}_{ct}.h5", key="db")
+    for i in range(10):
+        acycles = 30
+        images = generate_images(
+            num_images=50, verbose=1, augment=True, augment_cycles=acycles
+        )
+        images.to_hdf(f"db/generated_{acycles}_{ct}_{i}.h5", key="db")

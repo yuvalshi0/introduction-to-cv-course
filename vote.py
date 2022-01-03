@@ -24,7 +24,7 @@ def vote(X, y_pred, verbose=False):
 
 def votev2(X, y_pred, verbose=False):
     """
-    same as v1, only each char votes, and then each vord
+    same as v1, only each char votes, and then each word, in reality, I tested both and it didn't really make such of a difference
     """
     X = X[X.img_name != GENERATE_TOKEN]  # generated image do not vote
     X["pred"] = np.argmax(y_pred, axis=1)

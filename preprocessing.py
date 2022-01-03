@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-from augment import augment_image
+from augment import BAD_augment_image, augment_image, augment_image_v2
 from plogging import log_time, logger
 
 IMG_SIZE = int(config["main"]["img_size"])
@@ -130,6 +130,7 @@ def create_dataset(
     augment=False,
     augment_cycles=3,
     save=True,
+    augment_method=augment_image,
 ):
     """
     main function - read h5 and return dataset
@@ -156,6 +157,7 @@ def create_dataset(
             char, word = chars[i]
 
             img_ = crop(img, bb)
+
             if rotation:
                 img_ = rotate(img_, bb)
             simg_ = standardize(img_)
@@ -176,7 +178,7 @@ def create_dataset(
                     else int(augment_cycles * 1.5)
                 )
                 for _ in range(augment_cycles_):
-                    tmpimg_ = augment_image(img_)
+                    tmpimg_ = augment_method(img_)
                     simg_ = standardize(tmpimg_)
                     dataset.append(
                         {
@@ -195,9 +197,12 @@ def create_dataset(
     if save:
         import time
 
-        t = str(int(time.time()))[-3:]
+        t = str(int(time.time()))[-3:]  # for unique name
         l_ = len(df)
-        df.to_hdf(f"db/prep_{l_}_{t}.h5", key="db")
+        aug_cycles = 0 if not augment else augment_cycles
+        df.to_hdf(
+            f"db/prep_{l_}r_{aug_cycles}a_{augment_method.__name__}_{t}.h5", key="db"
+        )
 
     return df
 
@@ -208,6 +213,7 @@ if __name__ == "__main__":
         verbose=1,
         rotation=True,
         augment=True,
-        augment_cycles=30,
+        augment_cycles=1,
         save=True,
+        augment_method=augment_image,
     )
