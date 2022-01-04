@@ -47,7 +47,7 @@ def plot_confusion_matrix(
     plt.show()
 
 
-def plot_loss(history, save=False):
+def plot_acc(history, save=False):
 
     # summarize history for accuracy
     plt.plot(history.history["accuracy"])
@@ -57,11 +57,11 @@ def plot_loss(history, save=False):
     plt.xlabel("epoch")
     plt.legend(["Train", "Validation"], loc="upper left")
     if save:
-        plt.savefig("metrics/loss.png")
+        plt.savefig("metrics/accuracy.png")
     plt.show()
 
 
-def plot_acc(history, save=False):
+def plot_loss(history, save=False):
     plt.plot(history.history["loss"])
     plt.plot(history.history["val_loss"])
     plt.title("model loss")
@@ -69,7 +69,7 @@ def plot_acc(history, save=False):
     plt.xlabel("epoch")
     plt.legend(["Train", "Validation"], loc="upper left")
     if save:
-        plt.savefig("metrics/accuracy.png")
+        plt.savefig("metrics/loss.png")
     plt.show()
 
 

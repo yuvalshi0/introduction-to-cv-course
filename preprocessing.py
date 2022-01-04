@@ -14,11 +14,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
 
 from augment import BAD_augment_image, augment_image, augment_image_v2
 from plogging import log_time, logger
 
 IMG_SIZE = int(config["main"]["img_size"])
+CLASSES = config.get_classes()
 
 
 def _limit_correction(pts, shape):
@@ -121,6 +123,50 @@ def mk_charlst(lst):
     return clst
 
 
+def _split_data_set(dataset):
+    X = dataset.drop(columns=["font"])
+    Y = dataset["font"].apply(lambda s: CLASSES.index(s))
+
+    CAT_CLASSES = tf.keras.utils.to_categorical(np.unique(Y))
+
+    f_ = lambda i: CAT_CLASSES[i]
+
+    Y = f_(Y)
+    return train_test_split(X, Y, random_state=0, test_size=0.3)
+
+
+def _augment_dataset(X, Y, augment_method, augment_cycles, verbose=False):
+    X["font"] = np.array(Y)  # temporary unite the datasets
+    records = X.to_dict("records")
+    aug_train = []
+    c = 0
+    for record in records:
+        for _ in range(augment_cycles):
+            tmpimg_ = augment_method(record["img"])
+            aug_train.append(
+                {
+                    "img": tmpimg_,
+                    "font": record["font"],
+                    "char": record["char"],
+                    "word": record["word"],
+                    "img_name": record["img_name"],
+                }
+            )
+            if verbose:
+                c += 1
+                img_name = record["img_name"]
+                logger.info(
+                    f"Finished augmenting image {c}/{len(X)*augment_cycles} [image={img_name}]"
+                )
+    aug_df = pd.DataFrame(aug_train)
+    X_ = pd.concat([X, aug_df])
+    X_ = X_.sample(frac=1).reset_index(drop=True)  # shuffle
+    X_ = X_["img"].apply(standardize)
+    Y_ = X_["font"]
+    X_ = X_.drop(columns=["font"])  # drop y again
+    return X_, Y_
+
+
 @log_time
 def create_dataset(
     h5_file,
@@ -129,6 +175,7 @@ def create_dataset(
     rotation=False,
     augment=False,
     augment_cycles=3,
+    test_size=0.3,
     save=True,
     augment_method=augment_image,
 ):
@@ -138,7 +185,7 @@ def create_dataset(
     logger.info(f"Create dataset started [h5_file={h5_file}]")
     db = h5py.File(h5_file)
     dataset = []
-    images = photos or db["data"].keys()
+    images = photos or list(db["data"].keys())
     c = 0
 
     for im in images:
@@ -160,39 +207,42 @@ def create_dataset(
 
             if rotation:
                 img_ = rotate(img_, bb)
-            simg_ = standardize(img_)
 
             dataset.append(
                 {
-                    "img": simg_,
+                    "img": img_,
                     "font": font.decode("utf-8"),
                     "char": char,
                     "word": word,
                     "img_name": im,
                 }
             )
-            if augment:
-                augment_cycles_ = (
-                    augment_cycles
-                    if not font == "Michroma"
-                    else int(augment_cycles * 1.5)
-                )
-                for _ in range(augment_cycles_):
-                    tmpimg_ = augment_method(img_)
-                    simg_ = standardize(tmpimg_)
-                    dataset.append(
-                        {
-                            "img": simg_,
-                            "font": font.decode("utf-8"),
-                            "char": char,
-                            "word": word,
-                            "img_name": im,
-                        }
-                    )
-        if verbose:
-            c += 1
-            logger.info(f"Finished image {c}/{len(images)} [image={im}]")
+            if verbose:
+                c += 1
+                logger.info(f"Finished image {c}/{len(images)} [image={im}]")
+
     df = pd.DataFrame(dataset)
+    Y = df["font"]
+    X = df.drop(columns=["font"])
+    x_train, x_test, y_train, y_test = train_test_split(
+        X, Y, random_state=0, test_size=test_size
+    )
+    if augment:
+        # augment train data
+        x_train, y_train = _augment_dataset(
+            x_train,
+            y_train,
+            augment_method=augment_method,
+            augment_cycles=augment_cycles,
+            verbose=verbose,
+        )
+        x_test, y_test = _augment_dataset(
+            x_test,
+            y_test,
+            augment_method=augment_method,
+            augment_cycles=augment_cycles,
+            verbose=verbose,
+        )
 
     if save:
         import time
@@ -200,11 +250,22 @@ def create_dataset(
         t = str(int(time.time()))[-3:]  # for unique name
         l_ = len(df)
         aug_cycles = 0 if not augment else augment_cycles
-        df.to_hdf(
-            f"db/prep_{l_}r_{aug_cycles}a_{augment_method.__name__}_{t}.h5", key="db"
-        )
 
-    return df
+        train_data = x_train
+        train_data["font"] = y_train
+
+        test_data = x_test
+        x_test["font"] = y_test
+
+        train_data.to_hdf(
+            f"db/prep_{l_}r_{aug_cycles}a_train_{augment_method.__name__}_{t}.h5",
+            key="db",
+        )
+        test_data.to_hdf(
+            f"db/prep_{l_}r_{aug_cycles}a_test_{augment_method.__name__}_{t}.h5",
+            key="db",
+        )
+    return x_train, x_test, y_train, y_test
 
 
 if __name__ == "__main__":
