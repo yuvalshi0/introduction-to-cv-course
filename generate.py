@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 
-from augment import BAD_augment_image, augment_image
+from augment import augment_image
 from plogging import log_time, logger
 from preprocessing import standardize
 

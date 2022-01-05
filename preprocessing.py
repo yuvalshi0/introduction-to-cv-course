@@ -16,11 +16,12 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from augment import BAD_augment_image, augment_image, augment_image_v2
+from augment import augment_image_v4
 from plogging import log_time, logger
 
 IMG_SIZE = int(config["main"]["img_size"])
 CLASSES = config.get_classes()
+CACHE_PATH = config["main"]["cache_path"]
 
 
 def _limit_correction(pts, shape):
@@ -108,7 +109,7 @@ def standardize(img):
     """
     resize to 32x32 and make it gray
     """
-    img_ = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+    img_ = cv2.resize(np.uint8(img), (IMG_SIZE, IMG_SIZE))
     return cv2.cvtColor(img_, cv2.COLOR_BGR2GRAY)
 
 
@@ -123,70 +124,31 @@ def mk_charlst(lst):
     return clst
 
 
-def _split_data_set(dataset):
-    X = dataset.drop(columns=["font"])
-    Y = dataset["font"].apply(lambda s: CLASSES.index(s))
-
-    CAT_CLASSES = tf.keras.utils.to_categorical(np.unique(Y))
-
-    f_ = lambda i: CAT_CLASSES[i]
-
-    Y = f_(Y)
-    return train_test_split(X, Y, random_state=0, test_size=0.3)
-
-
-def _augment_dataset(X, Y, augment_method, augment_cycles, verbose=False):
+def _augment_dataset(X, Y, augment_method, verbose=False):
     X["font"] = np.array(Y)  # temporary unite the datasets
     records = X.to_dict("records")
     aug_train = []
     c = 0
     for record in records:
-        for _ in range(augment_cycles):
-            tmpimg_ = augment_method(record["img"])
-            aug_train.append(
-                {
-                    "img": tmpimg_,
-                    "font": record["font"],
-                    "char": record["char"],
-                    "word": record["word"],
-                    "img_name": record["img_name"],
-                }
+        aug_train += augment_method(record)
+        if verbose:
+            c += 1
+            img_name = record["img_name"]
+            logger.info(
+                f"Finished augmenting image {c}/{len(records)} [image={img_name}]"
             )
-            if verbose:
-                c += 1
-                img_name = record["img_name"]
-                logger.info(
-                    f"Finished augmenting image {c}/{len(X)*augment_cycles} [image={img_name}]"
-                )
     aug_df = pd.DataFrame(aug_train)
     X_ = pd.concat([X, aug_df])
     X_ = X_.sample(frac=1).reset_index(drop=True)  # shuffle
-    X_ = X_["img"].apply(standardize)
     Y_ = X_["font"]
     X_ = X_.drop(columns=["font"])  # drop y again
     return X_, Y_
 
 
-@log_time
-def create_dataset(
-    h5_file,
-    verbose=False,
-    photos=None,
-    rotation=False,
-    augment=False,
-    augment_cycles=3,
-    test_size=0.3,
-    save=True,
-    augment_method=augment_image,
-):
-    """
-    main function - read h5 and return dataset
-    """
-    logger.info(f"Create dataset started [h5_file={h5_file}]")
-    db = h5py.File(h5_file)
+def _create_base_dataset(db, rotation, photos, verbose):
     dataset = []
-    images = photos or list(db["data"].keys())
     c = 0
+    images = photos or db["data"].keys()
 
     for im in images:
         img = db["data"][im][:]
@@ -207,7 +169,6 @@ def create_dataset(
 
             if rotation:
                 img_ = rotate(img_, bb)
-
             dataset.append(
                 {
                     "img": img_,
@@ -217,39 +178,64 @@ def create_dataset(
                     "img_name": im,
                 }
             )
-            if verbose:
-                c += 1
-                logger.info(f"Finished image {c}/{len(images)} [image={im}]")
+        if verbose:
+            c += 1
+            logger.info(f"Finished image {c}/{len(images)} [image={im}]")
+    return pd.DataFrame(dataset)
 
-    df = pd.DataFrame(dataset)
+
+@log_time
+def create_dataset(
+    h5_file,
+    verbose=False,
+    photos=None,
+    rotation=False,
+    augment_train=True,
+    augment_test=False,
+    test_size=0.3,
+    save=True,
+    augment_method=augment_image_v4,
+):
+    """
+    main function - read h5 and return dataset
+    """
+    logger.info(f"Create dataset started [h5_file={h5_file}]")
+    db = h5py.File(h5_file)
+    if os.path.exists(CACHE_PATH):
+        df = pd.read_hdf(CACHE_PATH, key="db")
+        logger.info(f"Collected db from catche [cache_path={CACHE_PATH}]")
+    else:
+        df = _create_base_dataset(db, rotation, photos, verbose)
+        df.to_hdf(CACHE_PATH, key="db")
+
     Y = df["font"]
     X = df.drop(columns=["font"])
     x_train, x_test, y_train, y_test = train_test_split(
         X, Y, random_state=0, test_size=test_size
     )
-    if augment:
+
+    if augment_train:
         # augment train data
         x_train, y_train = _augment_dataset(
             x_train,
             y_train,
             augment_method=augment_method,
-            augment_cycles=augment_cycles,
             verbose=verbose,
         )
+    if augment_test:
         x_test, y_test = _augment_dataset(
             x_test,
             y_test,
             augment_method=augment_method,
-            augment_cycles=augment_cycles,
             verbose=verbose,
         )
-
+    x_train["img"] = x_train["img"].apply(standardize)
+    x_test["img"] = x_test["img"].apply(standardize)
     if save:
         import time
 
         t = str(int(time.time()))[-3:]  # for unique name
         l_ = len(df)
-        aug_cycles = 0 if not augment else augment_cycles
 
         train_data = x_train
         train_data["font"] = y_train
@@ -258,11 +244,11 @@ def create_dataset(
         x_test["font"] = y_test
 
         train_data.to_hdf(
-            f"db/prep_{l_}r_{aug_cycles}a_train_{augment_method.__name__}_{t}.h5",
+            f"db/prep_{l_}r_train_{augment_method.__name__}_{t}.h5",
             key="db",
         )
         test_data.to_hdf(
-            f"db/prep_{l_}r_{aug_cycles}a_test_{augment_method.__name__}_{t}.h5",
+            f"db/prep_{l_}r__test_{augment_method.__name__}_{t}.h5",
             key="db",
         )
     return x_train, x_test, y_train, y_test
@@ -273,8 +259,7 @@ if __name__ == "__main__":
         "SynthText.h5",
         verbose=1,
         rotation=True,
-        augment=True,
-        augment_cycles=1,
+        augment_train=True,
         save=True,
-        augment_method=augment_image,
+        augment_method=augment_image_v4,
     )
