@@ -8,6 +8,8 @@ os.add_dll_directory(
 )  # https://github.com/tensorflow/tensorflow/issues/48868#issuecomment-841396124
 
 
+import pathlib
+
 import cv2
 import h5py
 import matplotlib.pyplot as plt
@@ -16,7 +18,7 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from augment import augment_image_v4
+from augment import augment_image_v4, augment_image_v5, canny
 from plogging import log_time, logger
 
 IMG_SIZE = int(config["main"]["img_size"])
@@ -107,10 +109,15 @@ def rotate(img, bb):
 
 def standardize(img):
     """
-    resize to 32x32 and make it gray
+    resize to img size
     """
-    img_ = cv2.resize(np.uint8(img), (IMG_SIZE, IMG_SIZE))
-    return cv2.cvtColor(img_, cv2.COLOR_BGR2GRAY)
+    # if len(img.shape) > 2:
+    #     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    return cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+
+
+def _decode(s):
+    return s.decode("utf-8") if isinstance(s, bytes) else s
 
 
 def mk_charlst(lst):
@@ -119,7 +126,7 @@ def mk_charlst(lst):
     """
     clst = []
     for word in lst:
-        word_ = word.decode("utf-8")
+        word_ = _decode(word)
         clst += [(c, word_) for c in word_]
     return clst
 
@@ -145,39 +152,40 @@ def _augment_dataset(X, Y, augment_method, verbose=False):
     return X_, Y_
 
 
-def _create_base_dataset(db, rotation, photos, verbose):
+def create_base_dataset(db, rotation, photos, verbose):
     dataset = []
     c = 0
-    images = photos or db["data"].keys()
-
+    images = photos or list(db["data"].keys())
     for im in images:
-        img = db["data"][im][:]
-        metadata = db["data"][im]
-        txt = metadata.attrs["txt"]
-        fonts = metadata.attrs["font"]
-        bbs = metadata.attrs["charBB"]
-        chars = mk_charlst(txt)
-        assert len(chars) == len(
-            fonts
-        ), "Some letters do not have their corresponding font"
-        for i in range(len(fonts)):
-            bb = bbs[:, :, i]
-            font = fonts[i]
-            char, word = chars[i]
-
-            img_ = crop(img, bb)
-
-            if rotation:
-                img_ = rotate(img_, bb)
-            dataset.append(
-                {
-                    "img": img_,
-                    "font": font.decode("utf-8"),
-                    "char": char,
-                    "word": word,
-                    "img_name": im,
-                }
-            )
+        try:
+            img = db["data"][im][:]
+            metadata = db["data"][im]
+            txt = metadata.attrs["txt"]
+            fonts = metadata.attrs["font"]
+            bbs = metadata.attrs["charBB"]
+            chars = mk_charlst(txt)
+            assert len(chars) == len(
+                fonts
+            ), "Some letters do not have their corresponding font"
+            for i in range(len(fonts)):
+                bb = bbs[:, :, i]
+                font = fonts[i]
+                char, word = chars[i]
+                img_ = crop(img, bb)
+                if rotation:
+                    img_ = rotate(img_, bb)
+                img_ = standardize(img_)
+                dataset.append(
+                    {
+                        "img": img_,
+                        "font": _decode(font),
+                        "char": char,
+                        "word": word,
+                        "img_name": im,
+                    }
+                )
+        except Exception as e:
+            logger.info(f"Falied to add the image: {im}, failure reason: {e}")
         if verbose:
             c += 1
             logger.info(f"Finished image {c}/{len(images)} [image={im}]")
@@ -189,48 +197,46 @@ def create_dataset(
     h5_file,
     verbose=False,
     photos=None,
-    rotation=False,
-    augment_train=True,
-    augment_test=False,
+    rotation=True,
     test_size=0.3,
-    save=True,
-    augment_method=augment_image_v4,
+    save=False,
+    no_split=False,
+    cache=False,
 ):
     """
     main function - read h5 and return dataset
     """
     logger.info(f"Create dataset started [h5_file={h5_file}]")
     db = h5py.File(h5_file)
-    if os.path.exists(CACHE_PATH):
-        df = pd.read_hdf(CACHE_PATH, key="db")
-        logger.info(f"Collected db from catche [cache_path={CACHE_PATH}]")
+    cache_path = CACHE_PATH.format(IMG_SIZE)
+    if cache and os.path.exists(cache_path):
+        df = pd.read_hdf(cache_path, key="db")
+        logger.info(
+            f"Collected db from catche [cache_path={CACHE_PATH.format(IMG_SIZE)}]"
+        )
     else:
-        df = _create_base_dataset(db, rotation, photos, verbose)
-        df.to_hdf(CACHE_PATH, key="db")
+        df = create_base_dataset(db, rotation, photos, verbose)
+        if cache:
+            pathlib.Path("db").mkdir(exist_ok=True)
+            df.to_hdf(cache_path, key="db")
 
     Y = df["font"]
     X = df.drop(columns=["font"])
+    X["img"]
+    if no_split:
+        if save:
+            import time
+
+            t = str(int(time.time()))[-3:]  # for unique name
+            l_ = len(df)
+            df.to_hdf(
+                f"db/prep_{l_}r_unsplit_{t}.h5",
+                key="db",
+            )
+        return X, Y
     x_train, x_test, y_train, y_test = train_test_split(
         X, Y, random_state=0, test_size=test_size
     )
-
-    if augment_train:
-        # augment train data
-        x_train, y_train = _augment_dataset(
-            x_train,
-            y_train,
-            augment_method=augment_method,
-            verbose=verbose,
-        )
-    if augment_test:
-        x_test, y_test = _augment_dataset(
-            x_test,
-            y_test,
-            augment_method=augment_method,
-            verbose=verbose,
-        )
-    x_train["img"] = x_train["img"].apply(standardize)
-    x_test["img"] = x_test["img"].apply(standardize)
     if save:
         import time
 
@@ -244,22 +250,16 @@ def create_dataset(
         x_test["font"] = y_test
 
         train_data.to_hdf(
-            f"db/prep_{l_}r_train_{augment_method.__name__}_{t}.h5",
+            f"db/prep_{l_}r_train_{t}.h5",
             key="db",
         )
         test_data.to_hdf(
-            f"db/prep_{l_}r__test_{augment_method.__name__}_{t}.h5",
+            f"db/prep_{l_}r_test_{t}.h5",
             key="db",
         )
     return x_train, x_test, y_train, y_test
 
 
 if __name__ == "__main__":
-    ds = create_dataset(
-        "SynthText.h5",
-        verbose=1,
-        rotation=True,
-        augment_train=True,
-        save=True,
-        augment_method=augment_image_v4,
-    )
+    H5_FILE = config["main"]["h5_file"]
+    ds = create_dataset(H5_FILE, verbose=1, save=True, use_cache=True)

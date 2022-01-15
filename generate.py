@@ -1,3 +1,9 @@
+"""
+NOT USED
+This module contains the code which I described in the report at section V, to generate more photos
+In the end I used the project: https://github.com/yuvalshi0/SynthText/tree/python3
+To generate data
+"""
 import os
 
 import pandas as pd
@@ -15,7 +21,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 
-from augment import augment_image
+from augment import augment_image, augment_image_v4
 from plogging import log_time, logger
 from preprocessing import standardize
 
@@ -123,12 +129,6 @@ CHARS = [
 ]
 
 
-def _is_color_dark(color):
-    r, g, b = color
-    hsp = np.sqrt(0.299 * (r * r) + 0.587 * (g * g) + 0.114 * (b * b))
-    return hsp <= 127.5
-
-
 @log_time
 def generate_images(num_images=20, verbose=False, augment=False, augment_cycles=20):
     dataset = []
@@ -139,33 +139,24 @@ def generate_images(num_images=20, verbose=False, augment=False, augment_cycles=
             for font in FONTS:
                 base_img_name = np.random.choice(IMAGES)
                 img_ = generate_image(char=char, font=font, base_img_name=base_img_name)
-                simg_ = standardize(np.asarray(img_))
                 dataset.append(
                     {
-                        "img": simg_,
+                        "img": img_,
                         "font": font,
                         "char": char,
                         "word": GENERATE_TOKEN,
                         "img_name": GENERATE_TOKEN,
                     }
                 )
-                if augment:
-                    for _ in range(augment_cycles):
-                        tmpimg_ = augment_image(img_)
-                        simg_ = standardize(tmpimg_)
-                        dataset.append(
-                            {
-                                "img": simg_,
-                                "font": font,
-                                "char": char,
-                                "word": GENERATE_TOKEN,
-                                "img_name": GENERATE_TOKEN,
-                            }
-                        )
                 if verbose:
                     c += 1
                     logger.info(f"Finished generating photo {c}/{total_images}")
-    df = pd.DataFrame(dataset)
+    if augment:
+        aug_dataset = []
+        for record in dataset:
+            aug_dataset += augment_image(record)
+    df = pd.DataFrame(aug_dataset)
+    df["img"] = df["img"].apply(standardize)
     return df
 
 
@@ -178,12 +169,14 @@ def generate_image(char, font, base_img_name):
     font_size = int(IMG_SIZE * 1.5)
     font_ = ImageFont.truetype(f"{FONTS_FOLDER}\\{font}.ttf", font_size)
     # random start points
-    start_height = np.random.randint(0, img.shape[0] - IMG_SIZE)
-    start_width = np.random.randint(0, img.shape[1] - IMG_SIZE)
+    # start_height = np.random.randint(0, img.shape[0] - IMG_SIZE)
+    # start_width = np.random.randint(0, img.shape[1] - IMG_SIZE)
     img_ = Image.fromarray(
         img[
-            start_height : start_height + IMG_SIZE,
-            start_width : start_width + IMG_SIZE,
+            0:IMG_SIZE,
+            0:IMG_SIZE
+            # start_height : start_height + IMG_SIZE,
+            # start_width : start_width + IMG_SIZE,
         ]
     )
     d = ImageDraw.Draw(img_)
@@ -208,16 +201,12 @@ def generate_image(char, font, base_img_name):
         fill=color,
         font=font_,
     )
-    return img_
+    return np.array(img_)
 
 
 if __name__ == "__main__":
     import time
 
     ct = int(time.time())
-    for i in range(10):
-        acycles = 30
-        images = generate_images(
-            num_images=50, verbose=1, augment=True, augment_cycles=acycles
-        )
-        images.to_hdf(f"db/generated_{acycles}_{ct}_{i}.h5", key="db")
+    images = generate_images(num_images=120, verbose=1, augment=True)
+    images.to_hdf(f"db/generated_{ct}_{len(images)}.h5", key="db")
