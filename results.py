@@ -50,8 +50,6 @@ def plot_confusion_matrix(
 
 
 def plot_acc(history, save=False):
-
-    # summarize history for accuracy
     plt.plot(history.history["accuracy"])
     plt.plot(history.history["val_accuracy"])
     plt.title("model accuracy")
@@ -78,6 +76,7 @@ def plot_loss(history, save=False):
 def plot_roc(y_test, y_pred, zoom=True, save=False):
     """
     taken from: https://gist.github.com/Tony607/82f7dad24fc122a78d1bdd69e76fbffe with small adjustments
+    Plot ROC
     """
     n_classes = len(CLASSES)
     lw = 2
@@ -191,6 +190,9 @@ def plot_roc(y_test, y_pred, zoom=True, save=False):
 
 
 def to_csv(x_test, y, csv_file="results.csv"):
+    """
+    Saves results to csv file format
+    """
     df = x_test.copy()
     df["pred"] = np.argmax(y, axis=1)
 
@@ -206,6 +208,9 @@ def to_csv(x_test, y, csv_file="results.csv"):
 
 
 def log_stats(y_test, y_pred, save=True, file_path="metrics/stats.txt"):
+    """
+    Log the model statistics, can also save them in a txt file
+    """
     recall = tf.keras.metrics.Recall()
     recall.update_state(y_test, y_pred)
     precision = tf.keras.metrics.Precision()

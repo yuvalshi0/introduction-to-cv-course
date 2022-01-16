@@ -150,7 +150,19 @@ def _augment_dataset(X, Y, augment_method, verbose=False):
     return X_, Y_
 
 
-def create_base_dataset(db, rotation, photos, verbose):
+def preprocess_dataset(db, rotation, photos, verbose, x_only=False):
+    """Main method to preprocess the dataset and
+
+    Args:
+        db (H5.File): H5 file dataset
+        rotation (bool): Rotate the images
+        photos (List[str]): Fixed list to preprocess, useful for debugging, if None, will preprocess all the db keys.
+        verbose (bool): Log method progress
+        x_only (bool, optional): Preprocess without labels. Defaults to False.
+
+    Returns:
+        pd.DataFrame: pandas dataframe
+    """
     dataset = []
     c = 0
     images = photos or list(db["data"].keys())
@@ -159,15 +171,12 @@ def create_base_dataset(db, rotation, photos, verbose):
             img = db["data"][im][:]
             metadata = db["data"][im]
             txt = metadata.attrs["txt"]
-            fonts = metadata.attrs["font"]
+            fonts = metadata.attrs["font"] if not x_only else []
             bbs = metadata.attrs["charBB"]
             chars = mk_charlst(txt)
-            assert len(chars) == len(
-                fonts
-            ), "Some letters do not have their corresponding font"
-            for i in range(len(fonts)):
+            for i in range(len(chars)):
                 bb = bbs[:, :, i]
-                font = fonts[i]
+                font = fonts[i] if not x_only else "no-labels"
                 char, word = chars[i]
                 img_ = crop(img, bb)
                 if rotation:
@@ -187,11 +196,37 @@ def create_base_dataset(db, rotation, photos, verbose):
         if verbose:
             c += 1
             logger.info(f"Finished image {c}/{len(images)} [image={im}]")
-    return pd.DataFrame(dataset)
+
+    df = pd.DataFrame(dataset)
+    if x_only:
+        df = df.drop(columns=["font"])  # not relevant
+    return df
 
 
 @log_time
-def create_dataset(
+def load_unlabeled_dataset(
+    h5_file,
+    verbose=False,
+):
+    """
+    Main method to load unlabeled dataset
+
+    Args:
+        h5_file (str): h5 file location
+        verbose (bool, optional): print out method progress. Defaults to False.
+
+    Returns:
+        pd.DataFrame: the loaded dataset
+    """
+    logger.info(f"Creating unlabeled dataset started [h5_file={h5_file}]")
+    db = h5py.File(h5_file)
+    return preprocess_dataset(
+        db, rotation=True, photos=None, verbose=verbose, x_only=True
+    )
+
+
+@log_time
+def load_labeled_dataset(
     h5_file,
     verbose=False,
     photos=None,
@@ -202,7 +237,7 @@ def create_dataset(
     cache=False,
 ):
     """
-    Main method - preprocess & create the dataset
+    Main method - create the dataset, calls the preprocess method and returns the dataset with train/test split or without
 
     Args:
         h5_file (str): path to the h5 file dataset
@@ -217,7 +252,7 @@ def create_dataset(
     Returns:
         (train_x, test_x),(test_x, test_y) OR (X,Y) depends if no_split was given True or False
     """
-    logger.info(f"Create dataset started [h5_file={h5_file}]")
+    logger.info(f"Creating labeled dataset started [h5_file={h5_file}]")
     db = h5py.File(h5_file)
     cache_path = CACHE_PATH.format(IMG_SIZE)
     if cache and os.path.exists(cache_path):
@@ -226,7 +261,7 @@ def create_dataset(
             f"Collected db from catche [cache_path={CACHE_PATH.format(IMG_SIZE)}]"
         )
     else:
-        df = create_base_dataset(db, rotation, photos, verbose)
+        df = preprocess_dataset(db, rotation, photos, verbose)
         if cache:
             pathlib.Path("db").mkdir(exist_ok=True)
             df.to_hdf(cache_path, key="db")

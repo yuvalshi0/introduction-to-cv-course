@@ -8,7 +8,7 @@ def vote(X, y_pred, verbose=False):
     """
     return the predicted word based on voting between words
     """
-    X["pred"] = np.argmax(y_pred, axis=1)
+    X["pred"] = np.argmax(y_pred, axis=1).astype(int)
     grouped = X.groupby(by=["img_name", "word"])
     for name, group in grouped:
         img_name, word = name
