@@ -11,20 +11,28 @@ It also has an option to cache the results for future runs. See more info at the
 
 [`vote.py`](vote.py) - this file contains the methods for the voting mechanism, fixing the predictions by voting between all the words letter.
 
-[`config.py`](config.py) - TODO
+[`config.py`](config.py) - this file contains the config file for the entire project, you can control multiple parameters via the [`config.ini`](config.ini) file, like: image size, the classes and more
 
-[`plogging.py`](plogging.py) - TODO
+[`plogging.py`](plogging.py) - this file contains a simple logger for the project
 
 ### Unused files in the project
 
-[`augment.py`](augment.py) - TODO  
-[`generate.py`](generate.py) - TODO  
+[`augment.py`](augment.py) - this file was the first attempt to augment the images in the project, in the end I used tensorflow `ImageDataGenerator` to augment the images
+[`generate.py`](generate.py) - this file was my first attempt to generate more images for the test data, in the end I did not use this file and used the given project with the relevant changes - https://github.com/yuvalshi0/SynthText/tree/python3
 
-## To Run
+## Dependencies
+
+**Python Version:** Python 3.9.9  
+**Requirements:** tensorflow, pandas, numpy, sklearn, pillow, h5py, matplotlib
+
+## Running prediction\training
+
+### Predict from final model
+
+### Train the model
 
 TODO
+optional steps:
 
 > remove the cude file
 > change config.ini file
-
-## To predict

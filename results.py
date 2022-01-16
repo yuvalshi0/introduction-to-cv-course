@@ -6,11 +6,13 @@ import numpy as np
 import tensorflow as tf
 from sklearn.metrics import auc, roc_curve
 
-import plogging
+from config import config
+
+CLASSES = config.get_classes()
 
 
 def plot_confusion_matrix(
-    y_test, y_pred, classes, title="Confusion matrix", cmap=plt.cm.Blues, save=False
+    y_test, y_pred, title="Confusion matrix", cmap=plt.cm.Blues, save=False
 ):
     """
     Taken from: https://deeplizard.com/learn/video/km7pxKy4UHU with some adjustions
@@ -23,9 +25,9 @@ def plot_confusion_matrix(
     plt.imshow(cm, interpolation="nearest", cmap=cmap)
     plt.title(title)
     plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
+    tick_marks = np.arange(len(CLASSES))
+    plt.xticks(tick_marks, CLASSES, rotation=45)
+    plt.yticks(tick_marks, CLASSES)
 
     cm = np.around(cm.astype("float") / cm.sum(axis=1)[:, np.newaxis], decimals=2)
 
@@ -73,11 +75,11 @@ def plot_loss(history, save=False):
     plt.show()
 
 
-def plot_roc(y_test, y_pred, classes, zoom=True, save=False):
+def plot_roc(y_test, y_pred, zoom=True, save=False):
     """
     taken from: https://gist.github.com/Tony607/82f7dad24fc122a78d1bdd69e76fbffe with small adjustments
     """
-    n_classes = len(classes)
+    n_classes = len(CLASSES)
     lw = 2
     # Compute ROC curve and ROC area for each class
     fpr = {}
@@ -85,21 +87,21 @@ def plot_roc(y_test, y_pred, classes, zoom=True, save=False):
     roc_auc = {}
     thresholds = {}
     for i in range(n_classes):
-        fpr[classes[i]], tpr[classes[i]], thresholds[classes[i]] = roc_curve(
+        fpr[CLASSES[i]], tpr[CLASSES[i]], thresholds[CLASSES[i]] = roc_curve(
             y_test[:, i], y_pred[:, i], drop_intermediate=False
         )
-        roc_auc[classes[i]] = auc(fpr[classes[i]], tpr[classes[i]])
+        roc_auc[CLASSES[i]] = auc(fpr[CLASSES[i]], tpr[CLASSES[i]])
 
     # Compute micro-average ROC curve and ROC area
     fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_pred.ravel())
     roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
     # First aggregate all false positive rates
-    all_fpr = np.unique(np.concatenate([fpr[c] for c in classes]))
+    all_fpr = np.unique(np.concatenate([fpr[klass] for klass in CLASSES]))
 
     # Then interpolate all ROC curves at this points
     mean_tpr = np.zeros_like(all_fpr)
-    for c in classes:
+    for c in CLASSES:
         mean_tpr += np.interp(all_fpr, fpr[c], tpr[c])
 
     # Finally average it and compute AUC
@@ -130,7 +132,7 @@ def plot_roc(y_test, y_pred, classes, zoom=True, save=False):
     )
 
     colors = itertools.cycle(mcolors.TABLEAU_COLORS.keys())
-    for c, color in zip(classes, colors):
+    for c, color in zip(CLASSES, colors):
         plt.plot(
             fpr[c],
             tpr[c],
@@ -176,7 +178,7 @@ def plot_roc(y_test, y_pred, classes, zoom=True, save=False):
         )
 
         colors = itertools.cycle(mcolors.TABLEAU_COLORS.keys())
-        for c, color in zip(classes, colors):
+        for c, color in zip(CLASSES, colors):
             plt.plot(
                 fpr[c],
                 tpr[c],
@@ -188,16 +190,39 @@ def plot_roc(y_test, y_pred, classes, zoom=True, save=False):
     plt.show()
 
 
-def to_csv(x_test, y, classes, csv_file="results.csv"):
+def to_csv(x_test, y, csv_file="results.csv"):
     df = x_test.copy()
     df["pred"] = np.argmax(y, axis=1)
 
-    for klass in classes:
+    for klass in CLASSES:
         x_test[klass] = 0  # add classes column
-    df["pred"] = df["pred"].apply(lambda idx: classes[idx])  # back to label
+    df["pred"] = df["pred"].apply(lambda idx: CLASSES[idx])  # back to label
     for index, row in df.iterrows():
         df.at[index, row.pred] = 1
 
     df = df.drop(columns=["pred", "img"], errors="ignore")
     df = df.rename(columns={"img_name": "img"})
     df.to_csv(csv_file)
+
+
+def log_stats(y_test, y_pred, save=True, file_path="metrics/stats.txt"):
+    recall = tf.keras.metrics.Recall()
+    recall.update_state(y_test, y_pred)
+    precision = tf.keras.metrics.Precision()
+    precision.update_state(y_test, y_pred)
+    auc = tf.keras.metrics.AUC()
+    auc.update_state(y_test, y_pred)
+    acc = tf.keras.metrics.CategoricalAccuracy()
+    acc.update_state(y_test, y_pred)
+
+    print(f"Accuracy: {acc.result().numpy()}")
+    print(f"Recall: {recall.result().numpy()}")
+    print(f"Precision: {precision.result().numpy()}")
+    print(f"AUC: {auc.result().numpy()}")
+
+    if save:
+        with open(file_path, "w") as f:
+            print(f"Accuracy: {acc.result().numpy()}", file=f)
+            print(f"Recall: {recall.result().numpy()}", file=f)
+            print(f"Precision: {precision.result().numpy()}", file=f)
+            print(f"AUC: {auc.result().numpy()}", file=f)

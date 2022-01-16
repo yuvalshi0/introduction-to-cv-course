@@ -1,5 +1,5 @@
 """
-NOT USED
+!!! THIS FILE WAS NOT USED !!!
 This module contains the code which I described in the report at section V, to generate more photos
 In the end I used the project: https://github.com/yuvalshi0/SynthText/tree/python3
 To generate data
@@ -18,7 +18,6 @@ os.add_dll_directory(
 
 import cv2
 import numpy as np
-import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 
 from augment import augment_image, augment_image_v4

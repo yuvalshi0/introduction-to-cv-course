@@ -1,5 +1,5 @@
 **/*.pdf
-#**/*.docx
+**/*.docx
 **/*.zip
 **/*.venv
 **/*.h5
@@ -8,6 +8,7 @@
 **/*.vscode/
 **/*metrics/
 **/*db/
-# config files
+#config files
 **/*.ini
 **/*models/
+**/*.csv

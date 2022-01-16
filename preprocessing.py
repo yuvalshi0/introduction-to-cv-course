@@ -12,13 +12,11 @@ import pathlib
 
 import cv2
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from augment import augment_image_v4, augment_image_v5, canny
 from plogging import log_time, logger
 
 IMG_SIZE = int(config["main"]["img_size"])
@@ -204,7 +202,20 @@ def create_dataset(
     cache=False,
 ):
     """
-    main function - read h5 and return dataset
+    Main method - preprocess & create the dataset
+
+    Args:
+        h5_file (str): path to the h5 file dataset
+        verbose (bool, optional): print out the method process. Defaults to False.
+        photos (List[str], optional): preprocess only if fixed list of photos, useful for debugging, if None - will preprocess all the pictures. Defaults to None.
+        rotation (bool, optional): Rotate the images. Defaults to True.
+        test_size (float, optional): Test size split. Defaults to 0.3.
+        save (bool, optional): Save the preprocessed data to the db Folder. Defaults to False.
+        no_split (bool, optional): Don't split the dataset into train and test data, just return X and y. Defaults to False.
+        cache (bool, optional): Cache the dataset, useful when you don't want to preprocess the same dataset again and again. Defaults to False.
+
+    Returns:
+        (train_x, test_x),(test_x, test_y) OR (X,Y) depends if no_split was given True or False
     """
     logger.info(f"Create dataset started [h5_file={h5_file}]")
     db = h5py.File(h5_file)
