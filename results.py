@@ -197,7 +197,7 @@ def to_csv(x_test, y, csv_file="results.csv"):
     df["pred"] = np.argmax(y, axis=1)
 
     for klass in CLASSES:
-        x_test[klass] = 0  # add classes column
+        df[klass] = 0  # add classes column
     df["pred"] = df["pred"].apply(lambda idx: CLASSES[idx])  # back to label
     for index, row in df.iterrows():
         df.at[index, row.pred] = 1
