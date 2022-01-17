@@ -47,3 +47,6 @@ Train time is about ~2 hours locally on my machine
 
 - Configure the `config.ini` file with the correct paths (to the h5 file, for example)
 - Remove the cuda dll os load (`os.add_dll_directory` used after the os import on both files), with this lines the GPU on my local computer didn't work
+
+#### Code can also be seen at:
+https://github.com/yuvalshi0/introduction-to-cv-course/tree/final-project
