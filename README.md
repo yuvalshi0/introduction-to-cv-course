@@ -6,6 +6,8 @@
 
 [`project.ipynb`](project.ipynb) - main file, contains all the stages in the project- preprocessing, generating more data, training and evaluating the model
 
+[`predict.ipynb`](predict.ipynb) - file for getting prediction and results from the final model
+
 [`preprocessing.py`](preprocessing.py) - this file create the dataset, or any dataset, from a given h5 file, outputted by the [SynthText](https://github.com/ankush-me/SynthText) project. It does so by cropping the letters, rotating them, and masking them with the average color of the letter.
 It also has an option to cache the results for future runs. See more info at the file.
 
@@ -49,4 +51,5 @@ Train time is about ~2 hours locally on my machine
 - Remove the cuda dll os load (`os.add_dll_directory` used after the os import on both files), with this lines the GPU on my local computer didn't work
 
 #### Code can also be seen at:
+
 https://github.com/yuvalshi0/introduction-to-cv-course/tree/final-project
